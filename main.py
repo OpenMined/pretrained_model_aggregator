@@ -23,13 +23,13 @@ class SimpleNN(nn.Module):
 
 def get_model_file(path: Path) -> str | None:
     model_files = []
-    entries= os.listdir(path)
-    pattern = r'^pretrained_mnist_label_[0-9]\.pt$'
+    entries = os.listdir(path)
+    pattern = r"^pretrained_mnist_label_[0-9]\.pt$"
 
     for entry in entries:
         if re.match(pattern, entry):
             model_files.append(entry)
-    
+
     return model_files[0] if model_files else None
 
 
@@ -119,7 +119,9 @@ def evaluate_global_model(global_model: nn.Module, dataset_path: Path) -> float:
 
 if __name__ == "__main__":
     client = Client.load()
-    participants = network_participants(client.datasite_path.parent, Path("participants.json"))
+    participants = network_participants(
+        client.datasite_path.parent, Path("participants.json")
+    )
     global_model = None
     global_model = aggregate_model(
         participants,
@@ -133,5 +135,16 @@ if __name__ == "__main__":
     else:
         print("No models to aggregate")
 
+    output_dir: Path = (
+        Path(client.datasite_path) / "app_pipelines" / "model_aggregator"
+    )
 
+    if not output_dir.is_dir():
+        os.mkdir(str(output_dir))
 
+    with open(str(output_dir) + "/results.json", "w") as json_file:
+        json.dump(
+            {"accuracy": accuracy, "participants": participants},
+            json_file,
+            indent=4,
+        )
