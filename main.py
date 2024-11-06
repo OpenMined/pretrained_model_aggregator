@@ -21,7 +21,7 @@ class SimpleNN(nn.Module):
         return x
 
 
-def get_model_file(path: Path) -> str | None:
+def get_model_file(path: Path):
     model_files = []
     entries = os.listdir(path)
     pattern = r"^pretrained_mnist_label_[0-9]\.pt$"
