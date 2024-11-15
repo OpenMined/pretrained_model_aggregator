@@ -54,7 +54,6 @@ def aggregate_model(
 
         user_model_state = torch.load(str(model_file))
         for key in global_model_state_dict.keys():
-
             # If user model has a different architecture than my global model.
             # Skip it
             if user_model_state.keys() != global_model_state_dict.keys():
@@ -135,9 +134,7 @@ if __name__ == "__main__":
     else:
         print("No models to aggregate")
 
-    output_dir: Path = (
-        Path(client.datasite_path) / "app_pipelines" / "model_aggregator"
-    )
+    output_dir: Path = client.api_data("model_aggregator")
 
     if not output_dir.is_dir():
         os.mkdir(str(output_dir))
