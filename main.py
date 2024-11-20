@@ -16,7 +16,7 @@ class StateNotReady(Exception):
 
 APP_NAME = "pretrained_model_aggregator"
 TEST_DATASET_NAME = "mnist_dataset.pt"
-SAMPLE_TEST_DATASET_PATH = Path("samples") / TEST_DATASET_NAME
+SAMPLE_TEST_DATASET_PATH = Path("./samples/test_data") / TEST_DATASET_NAME
 
 def get_app_private_data(client: Client, app_name: str) -> Path:
     """
