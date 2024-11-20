@@ -8,12 +8,6 @@ from torch.utils.data import DataLoader, TensorDataset
 import re
 import json
 
-
-# Exception name to indicate the state cannot advance
-# as there are some pre-requisites that are not met
-class StateNotReady(Exception):
-    pass
-
 APP_NAME = "pretrained_model_aggregator"
 TEST_DATASET_NAME = "mnist_dataset.pt"
 SAMPLE_TEST_DATASET_PATH = Path("./samples/test_data") / TEST_DATASET_NAME
