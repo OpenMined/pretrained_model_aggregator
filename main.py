@@ -85,8 +85,7 @@ def launch_aggregator(client: Client) -> None:
 
 
 def get_model_files(path: Path) -> list[Path]:
-    pattern = "pretrained_mnist_label_?.pt"
-    return list(path.glob(pattern))
+    return list(path.glob("pretrained_mnist_label_*.pt"))
 
 
 def aggregate_models(client: Client) -> None:
@@ -99,7 +98,7 @@ def aggregate_models(client: Client) -> None:
 
     if not participants_json.is_file():
         raise StateNotReady("participants.json file not found in the running folder")
-    
+
     with open(participants_json, "r") as f:
         participants = json.load(f)["participants"]
 
@@ -113,38 +112,44 @@ def aggregate_models(client: Client) -> None:
     n_peers = len(participants)
     aggregated_peers = []
     missing_peers = []
-    for user_folder in participants:
-        public_folder_path: Path = client.datasites / user_folder / "public"
+    for email in participants:
+        their_public_folder: Path = client.datasites / email / "public"
 
-        model_files: list[Path] = get_model_files(public_folder_path)
-        print("model_files", model_files)
-        if len(model_files) == 0:
-            missing_peers.append(user_folder)
+        their_model_files: list[Path] = get_model_files(their_public_folder)
+        if len(their_model_files) == 0:
+            print(f"No models found for {email} in '{their_public_folder}'")
+            missing_peers.append(email)
             continue
 
-        for model_file in model_files:
-            print(f"Aggregating {model_file}")
-            model_file = public_folder_path / model_file
-            aggregated_peers.append(user_folder)
-
+        for model_file in their_model_files:
+            print(f"Aggregating model '{model_file.name} from {email}")
+            model_file = their_public_folder / model_file
             user_model_state = torch.load(model_file, weights_only=True)
             for key in global_model_state_dict.keys():
                 # If user model has a different architecture than my global model.
                 # Skip it
                 if user_model_state.keys() != global_model_state_dict.keys():
+                    print(
+                        f"Model {model_file.name} from {email} has an invalid architecture"
+                    )
                     continue
-
                 if aggregated_model_weights.get(key, None) is None:
-                    aggregated_model_weights[key] = user_model_state[key] * (1 / n_peers)
+                    aggregated_model_weights[key] = user_model_state[key] * (
+                        1 / n_peers
+                    )
                 else:
-                    aggregated_model_weights[key] += user_model_state[key] * (1 / n_peers)
+                    aggregated_model_weights[key] += user_model_state[key] * (
+                        1 / n_peers
+                    )
 
-    if aggregated_model_weights:
-        global_model.load_state_dict(aggregated_model_weights)
-        torch.save(global_model.state_dict(), model_output_path)
-        return (participants, missing_peers)
-    else:
+            aggregated_peers.append(email)
+
+    if not aggregated_model_weights:
         return (None, None)
+
+    global_model.load_state_dict(aggregated_model_weights)
+    torch.save(global_model.state_dict(), model_output_path)
+    return (participants, missing_peers)
 
 
 def calculate_model_accuracy(global_model_path: Path, dataset_path: Path) -> float:
@@ -157,7 +162,7 @@ def calculate_model_accuracy(global_model_path: Path, dataset_path: Path) -> flo
     dataset = TensorDataset(images, labels)
     # create a dataloader for the dataset
     data_loader = DataLoader(dataset, batch_size=64, shuffle=True)
-    
+
     correct = 0
     total = 0
     with torch.no_grad():
@@ -171,20 +176,17 @@ def calculate_model_accuracy(global_model_path: Path, dataset_path: Path) -> flo
 
 
 def evaluate_global_model(
-    client: Client, 
-    participants: list[str] | None, 
-    missing_peers: list[str]| None
+    client: Client, participants: list[str] | None, missing_peers: list[str] | None
 ) -> None:
     if not participants:
-        raise StateNotReady("No participants found, skipping evaluation ...")
-
+        raise StateNotReady("No models aggregated. Skipping evaluation")
 
     running_folder = client.api_data(API_NAME) / "running"
     global_model_path = running_folder / "global_model.pt"
     if not global_model_path.is_file():
-        raise StateNotReady(f"ERROR: global model path ({global_model_path}) does not exist")
-
-    participants_json = running_folder / "participants.json"
+        raise StateNotReady(
+            f"ERROR: global model path ({global_model_path}) does not exist"
+        )
 
     # Evaluate the global model
     test_dataset_path: Path = get_app_private_data(client, API_NAME) / TEST_DATASET_NAME
@@ -194,10 +196,19 @@ def evaluate_global_model(
     results = {
         "accuracy": accuracy,
         "participants": participants,
-        "missing_peers": missing_peers
+        "missing_peers": missing_peers,
     }
+
     print("Accuracy Results:", results)
-    with open(running_folder / "results.json", "w") as f:
+    return results
+
+
+def save_result(results: dict):
+    running_folder = client.api_data(API_NAME) / "running"
+    results_path = running_folder / "results.json"
+    participants_json = running_folder / "participants.json"
+
+    with open(results_path, "w") as f:
         json.dump(results, f, indent=4)
 
     # If no missing peers, move the global model and results.json to the done folder
@@ -206,14 +217,13 @@ def evaluate_global_model(
     if not missing_peers:
         shutil.move(participants_json, done_folder)
         shutil.move(model_path, done_folder)
-        shutil.move(running_folder / "results.json", done_folder)
+        shutil.move(results_path, done_folder)
 
 
 if __name__ == "__main__":
     client = Client.load()
 
     try:
-
         # Step 1: Init the Aggregator API
         init_aggregator(client)
 
@@ -225,7 +235,10 @@ if __name__ == "__main__":
         participants, missing_peers = aggregate_models(client)
 
         # Step 4: Evaluate model
-        evaluate_global_model(client, participants, missing_peers)
+        results = evaluate_global_model(client, participants, missing_peers)
 
+        # Step 5: Save the results
+        save_result(results)
     except StateNotReady as e:
         print(f"StateNotReady: {e}")
+        exit(0)
