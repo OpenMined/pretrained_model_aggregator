@@ -95,7 +95,7 @@ def get_email_from_path(path: Path) -> str:
     return email
 
 
-def fed_agg(model_files: list[tuple[Path, str]], global_model_state_dict: dict) -> dict:
+def fed_agg(model_files: list[Path], global_model_state_dict: dict) -> dict:
     """
     Given a list of model files, load the models and aggregate them
     This can be changed to any aggregation strategy
