@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import re
 import json
+from typing_extensions import Optional
 
 API_NAME = "pretrained_model_aggregator"
 TEST_DATASET_NAME = "mnist_dataset.pt"
@@ -176,7 +177,7 @@ def calculate_model_accuracy(global_model_path: Path, dataset_path: Path) -> flo
 
 
 def evaluate_global_model(
-    client: Client, participants: list[str] | None, missing_peers: list[str] | None
+    client: Client, participants: Optional[list[str]], missing_peers: Optional[list[str]]
 ) -> None:
     if not participants:
         raise StateNotReady("No models aggregated. Skipping evaluation")
