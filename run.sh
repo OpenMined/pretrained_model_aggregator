@@ -11,7 +11,7 @@ fi
 
 . .venv/bin/activate
 
-uv pip install -U syftbox torch --quiet
+uv pip install -U syft-core torch --quiet
 
 # run app using python from venv
 echo "Running model_aggregator_app with $(python3 --version) at '$(which python3)'"

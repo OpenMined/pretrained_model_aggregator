@@ -1,6 +1,6 @@
 from pathlib import Path
 import shutil
-from syftbox.lib import Client
+from syft_core import Client
 import os
 import torch
 import torch.nn as nn
@@ -42,17 +42,17 @@ def get_app_private_data(client: Client, api_name: str) -> Path:
 
 def init_aggregator(client: Client) -> None:
     """
-    Creates the `pretrained_aggregator` api in the `api_data` folder
+    Creates the `pretrained_aggregator` api in the `app_data` folder
     with the following structure:
     ```
-    api_data
+    app_data
     └── pretrained_aggregator
             └── launch
             └── running
             └── done
     ```
     """
-    pretrained_aggregator = client.api_data(API_NAME)
+    pretrained_aggregator = client.app_data(API_NAME)
 
     for folder in ["launch", "running", "done"]:
         pretrained_aggregator_folder = pretrained_aggregator / folder
@@ -76,8 +76,8 @@ def launch_aggregator(client: Client) -> None:
 
     We look for the participants.json file in the launch folder
     """
-    launch_folder = client.api_data(API_NAME) / "launch"
-    running_folder = client.api_data(API_NAME) / "running"
+    launch_folder = client.app_data(API_NAME) / "launch"
+    running_folder = client.app_data(API_NAME) / "running"
 
     participants_json = launch_folder / "participants.json"
     if participants_json.is_file():
@@ -94,7 +94,7 @@ def aggregate_models(client: Client) -> None:
     Iterates over the running folder and tries to advance it
     It loads in the participants.json file and aggregates the models
     """
-    running_folder = client.api_data(API_NAME) / "running"
+    running_folder = client.app_data(API_NAME) / "running"
     participants_json = running_folder / "participants.json"
 
     if not participants_json.is_file():
@@ -182,7 +182,7 @@ def evaluate_global_model(
     if not participants:
         raise StateNotReady("No models aggregated. Skipping evaluation")
 
-    running_folder = client.api_data(API_NAME) / "running"
+    running_folder = client.app_data(API_NAME) / "running"
     global_model_path = running_folder / "global_model.pt"
     if not global_model_path.is_file():
         raise StateNotReady(
@@ -205,7 +205,7 @@ def evaluate_global_model(
 
 
 def save_result(results: dict):
-    running_folder = client.api_data(API_NAME) / "running"
+    running_folder = client.app_data(API_NAME) / "running"
     results_path = running_folder / "results.json"
     participants_json = running_folder / "participants.json"
 
@@ -213,7 +213,7 @@ def save_result(results: dict):
         json.dump(results, f, indent=4)
 
     # If no missing peers, move the global model and results.json to the done folder
-    done_folder = client.api_data(API_NAME) / "done"
+    done_folder = client.app_data(API_NAME) / "done"
     model_path = running_folder / "global_model.pt"
     if not missing_peers:
         shutil.move(participants_json, done_folder)
