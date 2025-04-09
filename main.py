@@ -89,6 +89,43 @@ def get_model_files(path: Path) -> list[Path]:
     return list(path.glob("pretrained_mnist_label_*.pt"))
 
 
+def get_email_from_path(path: Path) -> str:
+    parts = path.parts
+    public_index = parts.index('public')
+    email = parts[public_index - 1]
+    return email
+
+
+def fed_agg(model_files: list[Path], global_model_state_dict: dict) -> dict:
+    """
+    Given a list of model files, load the models and aggregate them
+    This can be changed to any aggregation strategy
+    """
+    aggregated_model_weights = {}
+    n_models = len(model_files)
+    for model_file in model_files:
+        email = get_email_from_path(model_file)
+        print(f"Aggregating model '{model_file.name} from '{email}'")
+        user_model_state = torch.load(model_file, weights_only=True)
+        for key in global_model_state_dict.keys():
+            # If user model has a different architecture than my global model.
+            # Skip it
+            if user_model_state.keys() != global_model_state_dict.keys():
+                print(
+                    f"Model {model_file.name} from {email} has an invalid architecture"
+                )
+                continue
+            if aggregated_model_weights.get(key, None) is None:
+                aggregated_model_weights[key] = user_model_state[key] * (
+                    1 / n_models
+                )
+            else:
+                aggregated_model_weights[key] += user_model_state[key] * (
+                    1 / n_models
+                )
+    return aggregated_model_weights
+
+
 def aggregate_models(client: Client) -> None:
     """
     Iterates over the running folder and tries to advance it
@@ -110,46 +147,28 @@ def aggregate_models(client: Client) -> None:
 
     aggregated_model_weights = {}
 
-    n_peers = len(participants)
-    aggregated_peers = []
+    model_files = []
     missing_peers = []
     for email in participants:
         their_public_folder: Path = client.datasites / email / "public"
-
         their_model_files: list[Path] = get_model_files(their_public_folder)
+
         if len(their_model_files) == 0:
             print(f"No models found for {email} in '{their_public_folder}'")
             missing_peers.append(email)
             continue
 
         for model_file in their_model_files:
-            print(f"Aggregating model '{model_file.name} from {email}")
-            model_file = their_public_folder / model_file
-            user_model_state = torch.load(model_file, weights_only=True)
-            for key in global_model_state_dict.keys():
-                # If user model has a different architecture than my global model.
-                # Skip it
-                if user_model_state.keys() != global_model_state_dict.keys():
-                    print(
-                        f"Model {model_file.name} from {email} has an invalid architecture"
-                    )
-                    continue
-                if aggregated_model_weights.get(key, None) is None:
-                    aggregated_model_weights[key] = user_model_state[key] * (
-                        1 / n_peers
-                    )
-                else:
-                    aggregated_model_weights[key] += user_model_state[key] * (
-                        1 / n_peers
-                    )
+            model_files.append(their_public_folder / model_file)
 
-            aggregated_peers.append(email)
+    aggregated_model_weights = fed_agg(model_files, global_model_state_dict)
 
     if not aggregated_model_weights:
         return (None, None)
 
     global_model.load_state_dict(aggregated_model_weights)
     torch.save(global_model.state_dict(), model_output_path)
+
     return (participants, missing_peers)
 
 
